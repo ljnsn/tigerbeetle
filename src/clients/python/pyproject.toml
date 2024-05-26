@@ -1,15 +1,15 @@
-[tool.poetry]
+[project]
+authors = [{ name = "Lukas Jansen", email = "info@ljnsn.com" }]
+requires-python = "<4.0,>=3.10"
+dependencies = []
 name = "tigerbeetle-python"
 version = "0.1.0"
 description = "TigerBeetle Python Client"
-authors = ["Federico Lorenzi <federico@tigerbeetle.com>"]
 
-[tool.poetry.dependencies]
-python = "^3.10"
+[tool.pdm.dev-dependencies]
+dev = ["cffi<2.0.0,>=1.15.1"]
 
-[tool.poetry.dev-dependencies]
-cffi = "^1.15.1"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

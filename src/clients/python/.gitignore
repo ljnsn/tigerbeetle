@@ -1,3 +1,5 @@
 _tb_client.c
 .venv/
 _tb_client.*.so
+.pdm-python
+.pdm-build/
