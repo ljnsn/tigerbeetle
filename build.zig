@@ -237,6 +237,18 @@ pub fn build(b: *std.Build) !void {
         break :blk b.addRunArtifact(tb_client_header);
     };
 
+    // Executable which generates src/clients/python/native/tb_client.h
+    const tb_client_header_generate_py = blk: {
+        const tb_client_header = b.addExecutable(.{
+            .name = "tb_client_header",
+            .root_source_file = .{ .path = "src/clients/python/tb_client_header.zig" },
+            .target = target,
+        });
+        tb_client_header.addModule("vsr", vsr_module);
+        tb_client_header.addOptions("vsr_options", options);
+        break :blk b.addRunArtifact(tb_client_header);
+    };
+
     {
         const test_filter: ?[]const u8 =
             if (b.args != null and b.args.?.len == 1) b.args.?[0] else null;
@@ -290,7 +302,7 @@ pub fn build(b: *std.Build) !void {
         python_client(
             b,
             mode,
-            &.{ &install_step.step, &tb_client_header_generate.step },
+            &.{ &install_step.step, &tb_client_header_generate_py.step },
             target,
             vsr_module,
             options,
@@ -718,12 +730,6 @@ fn python_client(
         build_step.dependOn(dependency);
     }
 
-    // Updates the generated header file:
-    const install_header = b.addInstallFile(
-        .{ .path = "src/clients/c/tb_client.h" },
-        "../src/clients/python/native/tb_client.h",
-    );
-
     const bindings = b.addExecutable(.{
         .name = "python_bindings",
         .root_source_file = .{ .path = "src/python_bindings.zig" },
@@ -752,12 +758,11 @@ fn python_client(
         lib.addOptions("vsr_options", options);
         link_tracer_backend(lib, git_clone_tracy, tracer_backend, cross_target);
 
-        lib.step.dependOn(&install_header.step);
         lib.step.dependOn(&bindings_step.step);
 
         // NB: New way to do lib.setOutputDir(). The ../ is important to escape zig-cache/.
         const lib_install = b.addInstallArtifact(lib, .{});
-        lib_install.dest_dir = .{ .custom = "../src/clients/python/native/" ++ platform[0] };
+        lib_install.dest_dir = .{ .custom = "../src/clients/python/tb_client/native/" ++ platform[0] };
         build_step.dependOn(&lib_install.step);
     }
 }
