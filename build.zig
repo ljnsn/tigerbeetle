@@ -287,6 +287,16 @@ pub fn build(b: *std.Build) !void {
     {
         var install_step = b.addInstallArtifact(tigerbeetle, .{});
 
+        python_client(
+            b,
+            mode,
+            &.{ &install_step.step, &tb_client_header_generate.step },
+            target,
+            vsr_module,
+            options,
+            git_clone_tracy,
+            tracer_backend,
+        );
         go_client(
             b,
             mode,
@@ -688,6 +698,66 @@ fn java_client(
             .custom = "../src/clients/java/src/main/resources/lib/" ++
                 comptime strip_glibc_version(platform[0]),
         };
+        build_step.dependOn(&lib_install.step);
+    }
+}
+
+fn python_client(
+    b: *std.Build,
+    mode: Mode,
+    dependencies: []const *std.Build.Step,
+    target: CrossTarget,
+    vsr_module: *std.Build.Module,
+    options: *std.Build.OptionsStep,
+    git_clone_tracy: *GitCloneStep,
+    tracer_backend: config.TracerBackend,
+) void {
+    const build_step = b.step("python_client", "Build Python client shared library");
+
+    for (dependencies) |dependency| {
+        build_step.dependOn(dependency);
+    }
+
+    // Updates the generated header file:
+    const install_header = b.addInstallFile(
+        .{ .path = "src/clients/c/tb_client.h" },
+        "../src/clients/python/native/tb_client.h",
+    );
+
+    const bindings = b.addExecutable(.{
+        .name = "python_bindings",
+        .root_source_file = .{ .path = "src/python_bindings.zig" },
+        .target = target,
+    });
+    bindings.addModule("vsr", vsr_module);
+    bindings.addOptions("vsr_options", options);
+    const bindings_step = b.addRunArtifact(bindings);
+
+    inline for (platforms) |platform| {
+        const cross_target = CrossTarget.parse(.{ .arch_os_abi = platform[0], .cpu_features = "baseline" }) catch unreachable;
+        var b_isolated = builder_with_isolated_cache(b, cross_target);
+
+        const lib = b_isolated.addStaticLibrary(.{
+            .name = "tb_client",
+            .root_source_file = .{ .path = "src/tb_client_exports.zig" },
+            .target = cross_target,
+            .optimize = mode,
+        });
+        lib.linkLibC();
+        lib.pie = true;
+        lib.bundle_compiler_rt = true;
+        lib.stack_protector = false;
+
+        lib.addModule("vsr", vsr_module);
+        lib.addOptions("vsr_options", options);
+        link_tracer_backend(lib, git_clone_tracy, tracer_backend, cross_target);
+
+        lib.step.dependOn(&install_header.step);
+        lib.step.dependOn(&bindings_step.step);
+
+        // NB: New way to do lib.setOutputDir(). The ../ is important to escape zig-cache/.
+        const lib_install = b.addInstallArtifact(lib, .{});
+        lib_install.dest_dir = .{ .custom = "../src/clients/python/native/" ++ platform[0] };
         build_step.dependOn(&lib_install.step);
     }
 }
