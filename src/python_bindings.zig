@@ -110,7 +110,7 @@ fn emit_enum(
     comptime Type: type,
     comptime mapping: TypeMapping,
 ) !void {
-    try buffer.writer().print("class {s}(enum.Enum) :\n", .{mapping.name});
+    try buffer.writer().print("class {s}(enum.Enum):\n", .{mapping.name});
 
     try emit_docs(buffer, mapping, 1, null);
     try buffer.writer().print("\n", .{});
