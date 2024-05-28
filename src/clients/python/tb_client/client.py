@@ -11,6 +11,7 @@ lib = _tb_client.lib
 
 @dataclass(slots=True)
 class Request:
+    id: int
     packet: ffi.CData
     result: ffi.CData
     ready: threading.Event
@@ -114,7 +115,6 @@ class Client:
     """Client for TigerBeetle."""
 
     completion_mapping = {}
-    inflight = {}
 
     def __init__(
         self,
@@ -165,7 +165,7 @@ class Client:
             lib.tb_client_deinit(self._tb_client)
             self._tb_client = None
 
-    def create_accounts(self, accounts: list[dict]) -> list[dict]:
+    def create_accounts(self, accounts: list[dict]) -> int:
         """Create accounts in the ledger.
 
         Args:
@@ -176,15 +176,25 @@ class Client:
         """
         count = len(accounts)
         results = ffi.new("tb_create_accounts_result_t[]", count)
+
+        batch = ffi.new("tb_account_t[]", count)
+        for idx, account in enumerate(accounts):
+            batch[idx].id = to_bigint(account["id"])
+            # batch[idx].user_data = account["user_data"]
+            batch[idx].ledger = account["ledger"]
+            batch[idx].code = account["code"]
+            batch[idx].flags = account.get("flags", 0)
+
         wrote = self._do_request(
             bindings.Operation.create_accounts,
             count,
-            accounts[0],
-            results[0],
+            batch,
+            results,
         )
+        print("wrote", wrote)
 
-        result_count = wrote / int(ffi.sizeof("tb_create_accounts_result_t"))
-        return results[0:result_count]
+        # result_count = wrote // int(ffi.sizeof("tb_create_accounts_result_t"))
+        return [(result.index, result.result) for result in results]
 
     def _do_request(
         self,
@@ -193,39 +203,48 @@ class Client:
         data: ffi.CData,
         result: ffi.CData,
     ) -> int:
+        print("do_request")
         if count == 0:
             raise errors.EmptyBatchError()
 
         if self._tb_client is None:
             raise errors.ClientClosedError()
 
-        req = Request(packet=None, result=result, ready=threading.Event())
-        status = lib.tb_client_acquire_packet(self._tb_client, req.packet)
-        if status == lib.TB_STATUS_CONCURRENCY_MAX_EXCEEDED:
+        req = Request(
+            id=0,
+            packet=ffi.new("tb_packet_t *"),
+            result=result,
+            ready=threading.Event(),
+        )
+        print("request", req)
+        status = lib.tb_client_acquire_packet(
+            self._tb_client[0],
+            ffi.new("tb_packet_t * *", req.packet),
+        )
+        if status == lib.TB_STATUS_CONCURRENCY_MAX_INVALID:
             raise errors.ConcurrencyExceededError()
         if status == lib.TB_PACKET_ACQUIRE_SHUTDOWN:
             raise errors.ClientClosedError()
         if req.packet is None:
             raise errors.TigerBeetleError("Unexpected None packet")
 
-        lib.tb_client_release_packet(self._tb_client, req.packet)
+        print("status", status)
+        lib.tb_client_release_packet(self._tb_client[0], req.packet)
 
-        req.packet.user_data = ffi.cast("void *", req)
+        self.inflight[req.id] = req
+
+        req.packet.user_data = ffi.cast("void *", req.id)
         req.packet.operation = ffi.cast("TB_OPERATION", op.value)
         req.packet.status = lib.TB_PACKET_OK
         req.packet.data_size = count * get_event_size(op)
         req.packet.data = data
 
-        # Set where to write the result bytes.
-        req.result = result
-
         # Submit the request.
-        lib.tb_client_submit(self._tb_client, req.packet)
+        lib.tb_client_submit(self._tb_client[0], req.packet)
 
         # Wait for the response
         req.ready.wait()
         status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
-        wrote = int(req.packet.data_size)
 
         if status != lib.TB_PACKET_OK:
             match status:
@@ -244,7 +263,7 @@ class Client:
                     )
 
         # Return the amount of bytes written into result
-        return wrote
+        return int(req.packet.data_size)
 
     def _on_completion_fn(
         self,
@@ -254,11 +273,12 @@ class Client:
         result_ptr,
         result_len,
     ) -> None:
-        req = Request(**packet.user_data)
+        print("request complete")
+        req = self.inflight[int(ffi.cast("int", packet[0].user_data))]
         if req.packet != packet:
             raise Exception("Packet mismatch")
 
-        wrote = ffi.new("uint32_t *", 0)
+        wrote = 0
         if result_len > 0 and result_ptr is not None:
             op = bindings.Operation(int(packet.operation))
             result_size = get_result_size(op)
@@ -270,7 +290,7 @@ class Client:
                 and op.value != lib.TB_OPERATION_GET_ACCOUNT_BALANCES
             ):
                 # Make sure the amount of results at least matches the amount of requests.
-                count = packet.data_size / get_event_size(op)
+                count = packet.data_size // get_event_size(op)
                 if count * result_size < result_len:
                     raise Exception("Invalid result length")
 
