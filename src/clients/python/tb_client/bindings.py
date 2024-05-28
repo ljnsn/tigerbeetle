@@ -114,8 +114,8 @@ class Transfer:
     """See [timestamp](https://docs.tigerbeetle.com/reference/transfer/#timestamp)"""
 
 
-class CreateAccountError(enum.Enum) :
-    """See [CreateAccountError](https://docs.tigerbeetle.com/reference/requests/create_accounts#)"""
+class CreateAccountResult(enum.Enum) :
+    """See [CreateAccountResult](https://docs.tigerbeetle.com/reference/requests/create_accounts#)"""
 
     ok = 0
     """See [ok](https://docs.tigerbeetle.com/reference/requests/create_accounts#ok)"""
@@ -163,8 +163,8 @@ class CreateAccountError(enum.Enum) :
     """See [exists](https://docs.tigerbeetle.com/reference/requests/create_accounts#exists)"""
 
 
-class CreateTransferError(enum.Enum) :
-    """See [CreateTransferError](https://docs.tigerbeetle.com/reference/requests/create_transfers#)"""
+class CreateTransferResult(enum.Enum) :
+    """See [CreateTransferResult](https://docs.tigerbeetle.com/reference/requests/create_transfers#)"""
 
     ok = 0
     """See [ok](https://docs.tigerbeetle.com/reference/requests/create_transfers#ok)"""
@@ -281,17 +281,17 @@ class CreateTransferError(enum.Enum) :
 
 
 @dataclass
-class CreateAccountsError:
+class CreateAccountsResult:
 
     index: int
-    result: CreateAccountError
+    result: CreateAccountResult
 
 
 @dataclass
-class CreateTransfersError:
+class CreateTransfersResult:
 
     index: int
-    result: CreateTransferError
+    result: CreateTransferResult
 
 
 @dataclass

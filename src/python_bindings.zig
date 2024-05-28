@@ -47,18 +47,18 @@ const type_mappings = .{
         .docs_link = "reference/transfer/#",
     } },
     .{ tb.CreateAccountResult, TypeMapping{
-        .name = "CreateAccountError",
+        .name = "CreateAccountResult",
         .docs_link = "reference/requests/create_accounts#",
     } },
     .{ tb.CreateTransferResult, TypeMapping{
-        .name = "CreateTransferError",
+        .name = "CreateTransferResult",
         .docs_link = "reference/requests/create_transfers#",
     } },
     .{ tb.CreateAccountsResult, TypeMapping{
-        .name = "CreateAccountsError",
+        .name = "CreateAccountsResult",
     } },
     .{ tb.CreateTransfersResult, TypeMapping{
-        .name = "CreateTransfersError",
+        .name = "CreateTransfersResult",
     } },
     .{ tb.AccountFilter, TypeMapping{
         .name = "AccountFilter",
@@ -118,6 +118,7 @@ fn emit_enum(
     inline for (@typeInfo(Type).Enum.fields) |field| {
         if (comptime mapping.hidden(field.name)) continue;
 
+        // TODO: make enums members uppercase
         try buffer.writer().print("    {s} = {d}\n", .{
             field.name,
             @intFromEnum(@field(Type, field.name)),
