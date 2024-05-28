@@ -96,21 +96,23 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
 
 def to_bigint(x: int) -> tuple[int, int]:
     b = f"{x:0>128b}"
+    assert len(b) == 128
     return int(b[:64], 2), int(b[64:], 2)
 
 
 def from_bigint(bigint: ffi.CData) -> int:
     mask = 1 << 64
-    h, l = bigint.high, bigint.low
-    if h == 0 and l == 0:
+    high, low = bigint.high, bigint.low
+    if high == 0 and low == 0:
         return 0
-    if h < 0:
-        h = h + mask
-    if l < 0:
-        l = l + mask
-    return l + h * mask
+    if high < 0:
+        high = high + mask
+    if low < 0:
+        low = low + mask
+    return low + high * mask
 
 
+# TODO: ensure endianness is correct
 class Client:
     """Client for TigerBeetle."""
 
@@ -162,10 +164,11 @@ class Client:
 
     def close(self) -> None:
         if self._tb_client is not None:
-            lib.tb_client_deinit(self._tb_client)
+            lib.tb_client_deinit(self._tb_client[0])
+            del self.completion_mapping[self._tb_client[0]]
             self._tb_client = None
 
-    def create_accounts(self, accounts: list[dict]) -> int:
+    def create_accounts(self, accounts: list[dict]) -> tuple[int, int]:
         """Create accounts in the ledger.
 
         Args:
@@ -180,7 +183,7 @@ class Client:
         batch = ffi.new("tb_account_t[]", count)
         for idx, account in enumerate(accounts):
             batch[idx].id = to_bigint(account["id"])
-            # batch[idx].user_data = account["user_data"]
+            batch[idx].user_data = account["user_data"]
             batch[idx].ledger = account["ledger"]
             batch[idx].code = account["code"]
             batch[idx].flags = account.get("flags", 0)
@@ -194,6 +197,45 @@ class Client:
         print("wrote", wrote)
 
         # result_count = wrote // int(ffi.sizeof("tb_create_accounts_result_t"))
+        return [(result.index, result.result) for result in results]
+
+    def create_transfers(self, transfers: list[dict]) -> int:
+        """Create transfers in the ledger.
+
+        Args:
+            transfers: List of transfer dictionaries.
+
+        Returns:
+            List of transfer creation results.
+        """
+        count = len(transfers)
+        results = ffi.new("tb_create_transfers_result_t[]", count)
+
+        batch = ffi.new("tb_transfer_t[]", count)
+        for idx, transfer in enumerate(transfers):
+            batch[idx].id = to_bigint(transfer["id"])
+            batch[idx].debit_account_id = to_bigint(transfer["debit_account_id"])
+            batch[idx].credit_account_id = to_bigint(transfer["credit_account_id"])
+            batch[idx].amount = to_bigint(transfer["amount"])
+            batch[idx].pending_id = to_bigint(transfer.get("pending_id", 0))
+            batch[idx].user_data_128 = to_bigint(transfer.get("user_data_128", 0))
+            batch[idx].user_data_64 = transfer.get("user_data_64", 0)
+            batch[idx].user_data_32 = transfer.get("user_data_32", 0)
+            batch[idx].timeout = transfer.get("timeout", 0)
+            batch[idx].ledger = transfer["ledger"]
+            batch[idx].code = transfer["code"]
+            batch[idx].flags = transfer.get("flags", 0)
+            batch[idx].timestamp = 0
+
+        wrote = self._do_request(
+            bindings.Operation.create_transfers,
+            count,
+            batch,
+            results,
+        )
+        print("wrote", wrote)
+
+        # result_count = wrote // int(ffi.sizeof("tb_create_transfers_result_t"))
         return [(result.index, result.result) for result in results]
 
     def _do_request(
@@ -231,13 +273,13 @@ class Client:
         print("status", status)
         lib.tb_client_release_packet(self._tb_client[0], req.packet)
 
-        self.inflight[req.id] = req
-
         req.packet.user_data = ffi.cast("void *", req.id)
         req.packet.operation = ffi.cast("TB_OPERATION", op.value)
         req.packet.status = lib.TB_PACKET_OK
         req.packet.data_size = count * get_event_size(op)
         req.packet.data = data
+
+        self.inflight[req.id] = req
 
         # Submit the request.
         lib.tb_client_submit(self._tb_client[0], req.packet)
