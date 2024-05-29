@@ -2,7 +2,7 @@
 authors = [{ name = "Lukas Jansen", email = "info@ljnsn.com" }]
 requires-python = "<4.0,>=3.10"
 dependencies = ["cffi>=1.16.0"]
-name = "tigerbeetle-python"
+name = "tigerbeetle-py"
 version = "0.1.0"
 description = "TigerBeetle Python Client"
 
