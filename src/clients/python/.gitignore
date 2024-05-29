@@ -3,3 +3,7 @@ _tb_client.c
 _tb_client.*.so
 .pdm-python
 .pdm-build/
+__pycache__/
+build/
+dist/
+*.egg-info/
