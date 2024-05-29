@@ -20,13 +20,6 @@ extern "Python" void on_completion_fn(uintptr_t, tb_client_t, tb_packet_t*, cons
 
 ffibuilder.cdef(defs)
 
-head = """\
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include "tb_client/native/tb_client.h"
-"""
-
 ffibuilder.set_source(
     "tb_client.native._tb_client",
     c_header,
