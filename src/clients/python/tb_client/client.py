@@ -100,9 +100,8 @@ def to_bigint(x: int) -> tuple[int, int]:
     return int(b[:64], 2), int(b[64:], 2)
 
 
-def from_bigint(bigint: ffi.CData) -> int:
+def from_bigint(high: int, low: int) -> int:
     mask = 1 << 64
-    high, low = bigint.high, bigint.low
     if high == 0 and low == 0:
         return 0
     if high < 0:
@@ -110,6 +109,10 @@ def from_bigint(bigint: ffi.CData) -> int:
     if low < 0:
         low = low + mask
     return low + high * mask
+
+
+def cint128_to_int(x: ffi.CData) -> int:
+    return from_bigint(x.high, x.low)
 
 
 # TODO: ensure endianness is correct
@@ -163,9 +166,10 @@ class Client:
                 raise errors.TigerBeetleError(msg)
 
     def close(self) -> None:
+        print("closing client")
         if self._tb_client is not None:
-            lib.tb_client_deinit(self._tb_client[0])
             del self.completion_mapping[self._tb_client[0]]
+            lib.tb_client_deinit(self._tb_client[0])
             self._tb_client = None
 
     def create_accounts(
@@ -259,6 +263,48 @@ class Client:
             for result in results
         ]
 
+    def lookup_accounts(self, account_ids: list[int]) -> list[bindings.Account]:
+        """Lookup accounts in the ledger.
+
+        Args:
+            account_ids: List of account IDs to look up.
+
+        Returns:
+            List of account dictionaries.
+        """
+        count = len(account_ids)
+        results = ffi.new("tb_account_t[]", count)
+
+        batch = ffi.new("tb_uint128_t[]", [to_bigint(i) for i in account_ids])
+
+        wrote = self._do_request(
+            bindings.Operation.LOOKUP_ACCOUNTS,
+            count,
+            batch,
+            results,
+        )
+        print("wrote", wrote)
+
+        result_count = wrote // int(ffi.sizeof("tb_account_t"))
+        return [
+            bindings.Account(
+                id=from_bigint(result.id.high, result.id.low),
+                debits_pending=cint128_to_int(result.debits_pending),
+                debits_posted=cint128_to_int(result.debits_posted),
+                credits_pending=cint128_to_int(result.credits_pending),
+                credits_posted=cint128_to_int(result.credits_posted),
+                user_data_128=cint128_to_int(result.user_data_128),
+                user_data_64=result.user_data_64,
+                user_data_32=result.user_data_32,
+                ledger=result.ledger,
+                code=result.code,
+                flags=result.flags,
+                timestamp=result.timestamp,
+                reserved=result.reserved,
+            )
+            for result in results[0:result_count]
+        ]
+
     def _do_request(
         self,
         op: bindings.Operation,
@@ -266,7 +312,7 @@ class Client:
         data: ffi.CData,
         result: ffi.CData,
     ) -> int:
-        print("do_request")
+        print("sending request")
         if count == 0:
             raise errors.EmptyBatchError()
 
@@ -369,7 +415,7 @@ def get_event_size(op: bindings.Operation) -> int:
     return {
         lib.TB_OPERATION_CREATE_ACCOUNTS: ffi.sizeof("tb_account_t"),
         lib.TB_OPERATION_CREATE_TRANSFERS: ffi.sizeof("tb_transfer_t"),
-        lib.TB_OPERATION_LOOKUP_ACCOUNTS: 0,
+        lib.TB_OPERATION_LOOKUP_ACCOUNTS: ffi.sizeof("tb_uint128_t"),
         lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_uint128_t"),
         lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_filter_t"),
         lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_filter_t"),
