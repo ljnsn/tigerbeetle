@@ -743,16 +743,14 @@ fn python_client(
         const cross_target = CrossTarget.parse(.{ .arch_os_abi = platform[0], .cpu_features = "baseline" }) catch unreachable;
         var b_isolated = builder_with_isolated_cache(b, cross_target);
 
-        const lib = b_isolated.addStaticLibrary(.{
+        const lib = b_isolated.addSharedLibrary(.{
             .name = "tb_client",
             .root_source_file = .{ .path = "src/tb_client_exports.zig" },
             .target = cross_target,
             .optimize = mode,
         });
+
         lib.linkLibC();
-        lib.pie = true;
-        lib.bundle_compiler_rt = true;
-        lib.stack_protector = false;
 
         lib.addModule("vsr", vsr_module);
         lib.addOptions("vsr_options", options);
