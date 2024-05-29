@@ -168,7 +168,10 @@ class Client:
             del self.completion_mapping[self._tb_client[0]]
             self._tb_client = None
 
-    def create_accounts(self, accounts: list[dict]) -> tuple[int, int]:
+    def create_accounts(
+        self,
+        accounts: list[dict],
+    ) -> list[bindings.CreateAccountsResult]:
         """Create accounts in the ledger.
 
         Args:
@@ -183,13 +186,16 @@ class Client:
         batch = ffi.new("tb_account_t[]", count)
         for idx, account in enumerate(accounts):
             batch[idx].id = to_bigint(account["id"])
-            batch[idx].user_data = account["user_data"]
             batch[idx].ledger = account["ledger"]
             batch[idx].code = account["code"]
             batch[idx].flags = account.get("flags", 0)
+            batch[idx].user_data_128 = to_bigint(account.get("user_data_128", 0))
+            batch[idx].user_data_64 = account.get("user_data_64", 0)
+            batch[idx].user_data_32 = account.get("user_data_32", 0)
+            batch[idx].timestamp = 0
 
         wrote = self._do_request(
-            bindings.Operation.create_accounts,
+            bindings.Operation.CREATE_ACCOUNTS,
             count,
             batch,
             results,
@@ -197,9 +203,18 @@ class Client:
         print("wrote", wrote)
 
         # result_count = wrote // int(ffi.sizeof("tb_create_accounts_result_t"))
-        return [(result.index, result.result) for result in results]
+        return [
+            bindings.CreateAccountsResult(
+                result.index,
+                bindings.CreateAccountResult(result.result),
+            )
+            for result in results
+        ]
 
-    def create_transfers(self, transfers: list[dict]) -> int:
+    def create_transfers(
+        self,
+        transfers: list[dict],
+    ) -> list[bindings.CreateTransfersResult]:
         """Create transfers in the ledger.
 
         Args:
@@ -228,7 +243,7 @@ class Client:
             batch[idx].timestamp = 0
 
         wrote = self._do_request(
-            bindings.Operation.create_transfers,
+            bindings.Operation.CREATE_TRANSFERS,
             count,
             batch,
             results,
@@ -236,7 +251,13 @@ class Client:
         print("wrote", wrote)
 
         # result_count = wrote // int(ffi.sizeof("tb_create_transfers_result_t"))
-        return [(result.index, result.result) for result in results]
+        return [
+            bindings.CreateTransfersResult(
+                result.index,
+                bindings.CreateTransferResult(result.result),
+            )
+            for result in results
+        ]
 
     def _do_request(
         self,
