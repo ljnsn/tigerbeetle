@@ -760,7 +760,7 @@ fn python_client(
 
         // NB: New way to do lib.setOutputDir(). The ../ is important to escape zig-cache/.
         const lib_install = b.addInstallArtifact(lib, .{});
-        lib_install.dest_dir = .{ .custom = "../src/clients/python/tb_client/native/" ++ platform[0] };
+        lib_install.dest_dir = .{ .custom = "../src/clients/python/lib/" ++ comptime strip_glibc_version(platform[0]) };
         build_step.dependOn(&lib_install.step);
     }
 }
