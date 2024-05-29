@@ -3,7 +3,8 @@
 import threading
 from dataclasses import dataclass
 
-from tb_client import _tb_client, bindings, errors
+from tb_client import bindings, errors
+from tb_client.native import _tb_client
 
 ffi = _tb_client.ffi
 lib = _tb_client.lib
@@ -449,11 +450,11 @@ class Client:
 
     def _on_completion_fn(
         self,
-        context,
-        client,
-        packet,
-        result_ptr,
-        result_len,
+        context: ffi.CData,
+        client: ffi.CData,
+        packet: ffi.CData,
+        result_ptr: ffi.CData,
+        result_len: ffi.CData,
     ) -> None:
         print("request complete")
         req = self.inflight[int(ffi.cast("int", packet[0].user_data))]

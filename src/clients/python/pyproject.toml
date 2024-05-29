@@ -9,7 +9,10 @@ description = "TigerBeetle Python Client"
 [tool.pdm.dev-dependencies]
 dev = ["cffi<2.0.0,>=1.15.1", "setuptools>=70.0.0", "ipdb>=0.13.13"]
 
+[tool.pdm.build]
+run-setuptools = true
+
 
 [build-system]
-requires = ["pdm-backend"]
+requires = ["pdm-backend", "setuptools", "cffi>=1.0.0"]
 build-backend = "pdm.backend"

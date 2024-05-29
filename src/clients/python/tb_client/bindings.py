@@ -50,7 +50,7 @@ class AccountFilterFlags(enum.Enum):
     """See [reversed](https://docs.tigerbeetle.com/reference/account-filter#flagsreversed)"""
 
 
-@dataclass
+@dataclass(slots=True)
 class Account:
     """See [Account](https://docs.tigerbeetle.com/reference/account/#)"""
 
@@ -82,7 +82,7 @@ class Account:
     """See [timestamp](https://docs.tigerbeetle.com/reference/account/#timestamp)"""
 
 
-@dataclass
+@dataclass(slots=True)
 class Transfer:
     """See [Transfer](https://docs.tigerbeetle.com/reference/transfer/#)"""
 
@@ -280,21 +280,21 @@ class CreateTransferResult(enum.Enum):
     """See [exceeds_debits](https://docs.tigerbeetle.com/reference/requests/create_transfers#exceeds_debits)"""
 
 
-@dataclass
+@dataclass(slots=True)
 class CreateAccountsResult:
 
     index: int
     result: CreateAccountResult
 
 
-@dataclass
+@dataclass(slots=True)
 class CreateTransfersResult:
 
     index: int
     result: CreateTransferResult
 
 
-@dataclass
+@dataclass(slots=True)
 class AccountFilter:
     """See [AccountFilter](https://docs.tigerbeetle.com/reference/account-filter#)"""
 
@@ -310,7 +310,7 @@ class AccountFilter:
     """See [flags](https://docs.tigerbeetle.com/reference/account-filter#flags)"""
 
 
-@dataclass
+@dataclass(slots=True)
 class AccountBalance:
     """See [AccountBalance](https://docs.tigerbeetle.com/reference/account-balances#)"""
 

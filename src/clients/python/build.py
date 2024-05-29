@@ -24,12 +24,12 @@ head = """\
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "native/tb_client.h"
+#include "tb_client/native/tb_client.h"
 """
 
 ffibuilder.set_source(
-    "tb_client._tb_client",
-    head,
+    "tb_client.native._tb_client",
+    c_header,
     libraries=["tb_client"],
     library_dirs=[lib_dir.as_posix()],
     extra_link_args=[f"-Wl,-rpath,{lib_dir.as_posix()}"],
