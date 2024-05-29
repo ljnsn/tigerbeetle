@@ -30,77 +30,13 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
     client._on_completion_fn(context, client, packet, result_ptr, result_len)
 
 
-# class ClientInterface(abc.ABC):
-#     """Client interface for TigerBeetle."""
-#
-#     @abc.abstractmethod
-#     def create_accounts(self, batch):
-#         """Create accounts in the ledger.
-#
-#         Args:
-#             batch (List[Dict]): List of account dictionaries.
-#
-#         Returns:
-#             List[Dict]: List of account creation results.
-#         """
-#
-#     @abc.abstractmethod
-#     def create_transfers(self, batch):
-#         """Create transfers in the ledger.
-#
-#         Args:
-#             batch (List[Dict]): List of transfer dictionaries.
-#
-#         Returns:
-#             List[Dict]: List of transfer creation results.
-#         """
-#
-#     @abc.abstractmethod
-#     def lookup_accounts(self):
-#         """Lookup accounts in the ledger.
-#
-#         Returns:
-#             List[Dict]: List of account dictionaries.
-#         """
-#
-#     @abc.abstractmethod
-#     def lookup_transfers(self):
-#         """Lookup transfers in the ledger.
-#
-#         Returns:
-#             List[Dict]: List of transfer dictionaries.
-#         """
-#
-#     @abc.abstractmethod
-#     def get_account_transfers(self, filter):
-#         """Get transfers for an account.
-#
-#         Args:
-#             filter (Dict): Filter dictionary.
-#
-#         Returns:
-#             List[Dict]: List of transfer dictionaries.
-#         """
-#
-#     @abc.abstractmethod
-#     def get_account_balances(self, filter):
-#         """Get balances for an account.
-#
-#         Args:
-#             filter (Dict): Filter dictionary.
-#
-#         Returns:
-#             List[Dict]: List of balance dictionaries.
-#         """
-
-
-def to_bigint(x: int) -> tuple[int, int]:
+def to_uint128(x: int) -> tuple[int, int]:
     b = f"{x:0>128b}"
-    assert len(b) == 128
+    assert len(b) == 128, f"expected 128 bits, got {len(b)}"
     return int(b[:64], 2), int(b[64:], 2)
 
 
-def from_bigint(high: int, low: int) -> int:
+def from_uint128(high: int, low: int) -> int:
     mask = 1 << 64
     if high == 0 and low == 0:
         return 0
@@ -112,7 +48,7 @@ def from_bigint(high: int, low: int) -> int:
 
 
 def cint128_to_int(x: ffi.CData) -> int:
-    return from_bigint(x.high, x.low)
+    return from_uint128(x.high, x.low)
 
 
 # TODO: ensure endianness is correct
@@ -131,7 +67,7 @@ class Client:
         addresses_raw = ",".join(addresses).encode()
         status = lib.tb_client_init(
             self._tb_client,
-            to_bigint(cluster_id),
+            to_uint128(cluster_id),
             ffi.new("char[]", addresses_raw),
             len(addresses_raw),
             concurrency_max,
@@ -168,8 +104,8 @@ class Client:
     def close(self) -> None:
         print("closing client")
         if self._tb_client is not None:
-            del self.completion_mapping[self._tb_client[0]]
             lib.tb_client_deinit(self._tb_client[0])
+            del self.completion_mapping[self._tb_client[0]]
             self._tb_client = None
 
     def create_accounts(
@@ -189,11 +125,11 @@ class Client:
 
         batch = ffi.new("tb_account_t[]", count)
         for idx, account in enumerate(accounts):
-            batch[idx].id = to_bigint(account["id"])
+            batch[idx].id = to_uint128(account["id"])
             batch[idx].ledger = account["ledger"]
             batch[idx].code = account["code"]
             batch[idx].flags = account.get("flags", 0)
-            batch[idx].user_data_128 = to_bigint(account.get("user_data_128", 0))
+            batch[idx].user_data_128 = to_uint128(account.get("user_data_128", 0))
             batch[idx].user_data_64 = account.get("user_data_64", 0)
             batch[idx].user_data_32 = account.get("user_data_32", 0)
             batch[idx].timestamp = 0
@@ -232,12 +168,12 @@ class Client:
 
         batch = ffi.new("tb_transfer_t[]", count)
         for idx, transfer in enumerate(transfers):
-            batch[idx].id = to_bigint(transfer["id"])
-            batch[idx].debit_account_id = to_bigint(transfer["debit_account_id"])
-            batch[idx].credit_account_id = to_bigint(transfer["credit_account_id"])
-            batch[idx].amount = to_bigint(transfer["amount"])
-            batch[idx].pending_id = to_bigint(transfer.get("pending_id", 0))
-            batch[idx].user_data_128 = to_bigint(transfer.get("user_data_128", 0))
+            batch[idx].id = to_uint128(transfer["id"])
+            batch[idx].debit_account_id = to_uint128(transfer["debit_account_id"])
+            batch[idx].credit_account_id = to_uint128(transfer["credit_account_id"])
+            batch[idx].amount = to_uint128(transfer["amount"])
+            batch[idx].pending_id = to_uint128(transfer.get("pending_id", 0))
+            batch[idx].user_data_128 = to_uint128(transfer.get("user_data_128", 0))
             batch[idx].user_data_64 = transfer.get("user_data_64", 0)
             batch[idx].user_data_32 = transfer.get("user_data_32", 0)
             batch[idx].timeout = transfer.get("timeout", 0)
@@ -275,7 +211,7 @@ class Client:
         count = len(account_ids)
         results = ffi.new("tb_account_t[]", count)
 
-        batch = ffi.new("tb_uint128_t[]", [to_bigint(i) for i in account_ids])
+        batch = ffi.new("tb_uint128_t[]", [to_uint128(i) for i in account_ids])
 
         wrote = self._do_request(
             bindings.Operation.LOOKUP_ACCOUNTS,
@@ -288,7 +224,7 @@ class Client:
         result_count = wrote // int(ffi.sizeof("tb_account_t"))
         return [
             bindings.Account(
-                id=from_bigint(result.id.high, result.id.low),
+                id=cint128_to_int(result.id),
                 debits_pending=cint128_to_int(result.debits_pending),
                 debits_posted=cint128_to_int(result.debits_posted),
                 credits_pending=cint128_to_int(result.credits_pending),
@@ -301,6 +237,143 @@ class Client:
                 flags=result.flags,
                 timestamp=result.timestamp,
                 reserved=result.reserved,
+            )
+            for result in results[0:result_count]
+        ]
+
+    def lookup_transfers(self, transfer_ids: list[int]) -> list[bindings.Transfer]:
+        """Lookup transfers in the ledger.
+
+        Args:
+            transfer_ids: List of transfer IDs to look up.
+
+        Returns:
+            List of transfer dictionaries.
+        """
+        count = len(transfer_ids)
+        results = ffi.new("tb_transfer_t[]", count)
+
+        batch = ffi.new("tb_uint128_t[]", [to_uint128(i) for i in transfer_ids])
+
+        wrote = self._do_request(
+            bindings.Operation.LOOKUP_TRANSFERS,
+            count,
+            batch,
+            results,
+        )
+
+        print("wrote", wrote)
+
+        result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
+        return [
+            bindings.Transfer(
+                id=cint128_to_int(result.id),
+                debit_account_id=cint128_to_int(result.debit_account_id),
+                credit_account_id=cint128_to_int(result.credit_account_id),
+                amount=cint128_to_int(result.amount),
+                pending_id=cint128_to_int(result.pending_id),
+                user_data_128=cint128_to_int(result.user_data_128),
+                user_data_64=result.user_data_64,
+                user_data_32=result.user_data_32,
+                timeout=result.timeout,
+                ledger=result.ledger,
+                code=result.code,
+                flags=result.flags,
+                timestamp=result.timestamp,
+            )
+            for result in results[0:result_count]
+        ]
+
+    def get_account_transfers(self, filters: list[dict]) -> list[bindings.Transfer]:
+        """Get transfers for an account.
+
+        Args:
+            filters: List of account filters.
+
+        Returns:
+            List of transfers.
+        """
+        count = 8190
+        results = ffi.new("tb_transfer_t[]", count)
+
+        batch = ffi.new("tb_account_filter_t[]", count)
+
+        for idx, filter in enumerate(filters):
+            batch[idx].account_id = to_uint128(filter["id"])
+            batch[idx].timestamp_min = filter.get("timestamp_min", 0)
+            batch[idx].timestamp_max = filter.get("timestamp_max", 0)
+            batch[idx].limit = filter.get("limit", 10)
+            batch[idx].flags = filter.get("flags", 0)
+
+        wrote = self._do_request(
+            bindings.Operation.GET_ACCOUNT_TRANSFERS,
+            count,
+            batch,
+            results,
+        )
+
+        print("wrote", wrote)
+
+        result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
+        return [
+            bindings.Transfer(
+                id=cint128_to_int(result.id),
+                debit_account_id=cint128_to_int(result.debit_account_id),
+                credit_account_id=cint128_to_int(result.credit_account_id),
+                amount=cint128_to_int(result.amount),
+                pending_id=cint128_to_int(result.pending_id),
+                user_data_128=cint128_to_int(result.user_data_128),
+                user_data_64=result.user_data_64,
+                user_data_32=result.user_data_32,
+                timeout=result.timeout,
+                ledger=result.ledger,
+                code=result.code,
+                flags=result.flags,
+                timestamp=result.timestamp,
+            )
+            for result in results[0:result_count]
+        ]
+
+    def get_account_balances(
+        self,
+        filters: list[dict],
+    ) -> list[bindings.AccountBalance]:
+        """Get balances for an account.
+
+        Args:
+            filters: List of account filters.
+
+        Returns:
+            List of account balances.
+        """
+        count = 8190
+        results = ffi.new("tb_account_balance_t[]", count)
+
+        batch = ffi.new("tb_account_filter_t[]", count)
+        for idx, filter in enumerate(filters):
+            batch[idx].account_id = to_uint128(filter["id"])
+            batch[idx].timestamp_min = filter.get("timestamp_min", 0)
+            batch[idx].timestamp_max = filter.get("timestamp_max", 0)
+            batch[idx].limit = filter.get("limit", 10)
+            batch[idx].flags = filter.get("flags", 0)
+
+        wrote = self._do_request(
+            bindings.Operation.GET_ACCOUNT_BALANCES,
+            count,
+            batch,
+            results,
+        )
+
+        print("wrote", wrote)
+
+        result_count = wrote // int(ffi.sizeof("tb_account_balance_t"))
+        return [
+            bindings.AccountBalance(
+                debits_pending=cint128_to_int(result.debits_pending),
+                debits_posted=cint128_to_int(result.debits_posted),
+                credits_pending=cint128_to_int(result.credits_pending),
+                credits_posted=cint128_to_int(result.credits_posted),
+                timestamp=result.timestamp,
             )
             for result in results[0:result_count]
         ]
