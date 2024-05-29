@@ -105,6 +105,28 @@ fn get_mapped_type_name(comptime Type: type) ?[]const u8 {
     } else return null;
 }
 
+fn to_upper_case(comptime input: []const u8) []const u8 {
+    // TODO(Zig): Cleanup when this is fixed after Zig 0.11.
+    // Without comptime blk, the compiler thinks slicing the output on return happens at runtime.
+    return comptime blk: {
+        var len: usize = 0;
+        var output = [_]u8{' '} ** input.len;
+        // not sure if we actually need to split here or if we can just
+        // call upperString on the whole input
+        var iterator = std.mem.tokenize(u8, input, "_");
+        while (iterator.next()) |word| {
+            _ = std.ascii.upperString(output[len..], word);
+            len += word.len;
+            if (len < input.len) {
+                output[len] = '_';
+                len += 1;
+            }
+        }
+
+        break :blk output[0..len];
+    };
+}
+
 fn emit_enum(
     buffer: *std.ArrayList(u8),
     comptime Type: type,
@@ -118,9 +140,8 @@ fn emit_enum(
     inline for (@typeInfo(Type).Enum.fields) |field| {
         if (comptime mapping.hidden(field.name)) continue;
 
-        // TODO: make enums members uppercase
         try buffer.writer().print("    {s} = {d}\n", .{
-            field.name,
+            to_upper_case(field.name),
             @intFromEnum(@field(Type, field.name)),
         });
 
@@ -142,13 +163,13 @@ fn emit_packed_struct(
     try emit_docs(buffer, mapping, 1, null);
 
     try buffer.writer().print("\n", .{});
-    try buffer.writer().print("    none = 0\n", .{});
+    try buffer.writer().print("    NONE = 0\n", .{});
 
     inline for (type_info.fields, 0..) |field, i| {
         if (comptime mapping.hidden(field.name)) continue;
 
         try buffer.writer().print("    {s} = (1 << {d})\n", .{
-            field.name,
+            to_upper_case(field.name),
             i,
         });
 
