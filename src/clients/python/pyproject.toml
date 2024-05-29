@@ -1,13 +1,13 @@
 [project]
 authors = [{ name = "Lukas Jansen", email = "info@ljnsn.com" }]
 requires-python = "<4.0,>=3.10"
-dependencies = []
+dependencies = ["cffi>=1.16.0"]
 name = "tigerbeetle-python"
 version = "0.1.0"
 description = "TigerBeetle Python Client"
 
 [tool.pdm.dev-dependencies]
-dev = ["cffi<2.0.0,>=1.15.1", "setuptools>=70.0.0", "ipdb>=0.13.13"]
+dev = ["ipdb>=0.13.13"]
 
 [tool.pdm.build]
 run-setuptools = true
