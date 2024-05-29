@@ -1,10 +1,23 @@
 """Generates the CFFI bindings for the tb_client library."""
 
-import cffi
+import platform
 from pathlib import Path
 
-this_dir = Path().absolute()
-lib_dir = this_dir.parent.joinpath("c", "lib", "x86_64-linux-gnu")
+import cffi
+
+
+def get_sys_info():
+    """Get the target architecture of the current system."""
+    arch = platform.machine()
+    system = platform.system().lower()
+    if system != "linux":
+        return f"{arch}-{system}"
+    libc = "gnu" if platform.libc_ver()[0] == "glibc" else "musl"
+    return f"{arch}-{system}-{libc}"
+
+
+this_dir = Path().parent.absolute()
+lib_dir = this_dir.joinpath("lib", get_sys_info())
 h_file = this_dir.joinpath("tb_client", "native", "tb_client.h")
 
 ffibuilder = cffi.FFI()
