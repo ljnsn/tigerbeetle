@@ -168,6 +168,8 @@ fn emit_packed_struct(
     inline for (type_info.fields, 0..) |field, i| {
         if (comptime mapping.hidden(field.name)) continue;
 
+        // TODO: create specific types and make bools and conversion functions
+        // like in go
         try buffer.writer().print("    {s} = (1 << {d})\n", .{
             to_upper_case(field.name),
             i,
@@ -184,7 +186,7 @@ fn emit_struct(
     comptime type_info: anytype,
     comptime mapping: TypeMapping,
 ) !void {
-    try buffer.writer().print("@dataclass\nclass {s}:\n", .{
+    try buffer.writer().print("@dataclass(slots=True)\nclass {s}:\n", .{
         mapping.name,
     });
 
