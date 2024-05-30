@@ -285,7 +285,8 @@ class Client:
         Returns:
             List of transfers.
         """
-        count = 8190
+        # NOTE: isn't limit required and we can use that?
+        count = sum(_filter.get("limit", 10) for _filter in filters)
         results = ffi.new("tb_transfer_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
@@ -338,7 +339,7 @@ class Client:
         Returns:
             List of account balances.
         """
-        count = 8190
+        count = sum(_filter.get("limit", 10) for _filter in filters)
         results = ffi.new("tb_account_balance_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
