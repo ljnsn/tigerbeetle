@@ -3,7 +3,7 @@
 import threading
 from dataclasses import dataclass
 
-from tb_client import bindings, errors
+from tb_client import bindings, errors, helpers
 from tb_client.native import _tb_client
 
 ffi = _tb_client.ffi
@@ -31,25 +31,8 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
     client._on_completion_fn(context, client, packet, result_ptr, result_len)
 
 
-def to_uint128(x: int) -> tuple[int, int]:
-    b = f"{x:0>128b}"
-    assert len(b) == 128, f"expected 128 bits, got {len(b)}"
-    return int(b[:64], 2), int(b[64:], 2)
-
-
-def from_uint128(high: int, low: int) -> int:
-    mask = 1 << 64
-    if high == 0 and low == 0:
-        return 0
-    if high < 0:
-        high = high + mask
-    if low < 0:
-        low = low + mask
-    return low + high * mask
-
-
 def cint128_to_int(x: ffi.CData) -> int:
-    return from_uint128(x.high, x.low)
+    return helpers.from_uint128(x.high, x.low)
 
 
 # TODO: ensure endianness is correct
@@ -68,7 +51,7 @@ class Client:
         addresses_raw = ",".join(addresses).encode()
         status = lib.tb_client_init(
             self._tb_client,
-            to_uint128(cluster_id),
+            helpers.to_uint128(cluster_id),
             ffi.new("char[]", addresses_raw),
             len(addresses_raw),
             concurrency_max,
@@ -126,11 +109,13 @@ class Client:
 
         batch = ffi.new("tb_account_t[]", count)
         for idx, account in enumerate(accounts):
-            batch[idx].id = to_uint128(account["id"])
+            batch[idx].id = helpers.to_uint128(account["id"])
             batch[idx].ledger = account["ledger"]
             batch[idx].code = account["code"]
             batch[idx].flags = account.get("flags", 0)
-            batch[idx].user_data_128 = to_uint128(account.get("user_data_128", 0))
+            batch[idx].user_data_128 = helpers.to_uint128(
+                account.get("user_data_128", 0)
+            )
             batch[idx].user_data_64 = account.get("user_data_64", 0)
             batch[idx].user_data_32 = account.get("user_data_32", 0)
             batch[idx].timestamp = 0
@@ -169,12 +154,18 @@ class Client:
 
         batch = ffi.new("tb_transfer_t[]", count)
         for idx, transfer in enumerate(transfers):
-            batch[idx].id = to_uint128(transfer["id"])
-            batch[idx].debit_account_id = to_uint128(transfer["debit_account_id"])
-            batch[idx].credit_account_id = to_uint128(transfer["credit_account_id"])
-            batch[idx].amount = to_uint128(transfer["amount"])
-            batch[idx].pending_id = to_uint128(transfer.get("pending_id", 0))
-            batch[idx].user_data_128 = to_uint128(transfer.get("user_data_128", 0))
+            batch[idx].id = helpers.to_uint128(transfer["id"])
+            batch[idx].debit_account_id = helpers.to_uint128(
+                transfer["debit_account_id"]
+            )
+            batch[idx].credit_account_id = helpers.to_uint128(
+                transfer["credit_account_id"]
+            )
+            batch[idx].amount = helpers.to_uint128(transfer["amount"])
+            batch[idx].pending_id = helpers.to_uint128(transfer.get("pending_id", 0))
+            batch[idx].user_data_128 = helpers.to_uint128(
+                transfer.get("user_data_128", 0)
+            )
             batch[idx].user_data_64 = transfer.get("user_data_64", 0)
             batch[idx].user_data_32 = transfer.get("user_data_32", 0)
             batch[idx].timeout = transfer.get("timeout", 0)
@@ -212,7 +203,7 @@ class Client:
         count = len(account_ids)
         results = ffi.new("tb_account_t[]", count)
 
-        batch = ffi.new("tb_uint128_t[]", [to_uint128(i) for i in account_ids])
+        batch = ffi.new("tb_uint128_t[]", [helpers.to_uint128(i) for i in account_ids])
 
         wrote = self._do_request(
             bindings.Operation.LOOKUP_ACCOUNTS,
@@ -254,7 +245,7 @@ class Client:
         count = len(transfer_ids)
         results = ffi.new("tb_transfer_t[]", count)
 
-        batch = ffi.new("tb_uint128_t[]", [to_uint128(i) for i in transfer_ids])
+        batch = ffi.new("tb_uint128_t[]", [helpers.to_uint128(i) for i in transfer_ids])
 
         wrote = self._do_request(
             bindings.Operation.LOOKUP_TRANSFERS,
@@ -300,7 +291,7 @@ class Client:
         batch = ffi.new("tb_account_filter_t[]", count)
 
         for idx, filter in enumerate(filters):
-            batch[idx].account_id = to_uint128(filter["id"])
+            batch[idx].account_id = helpers.to_uint128(filter["id"])
             batch[idx].timestamp_min = filter.get("timestamp_min", 0)
             batch[idx].timestamp_max = filter.get("timestamp_max", 0)
             batch[idx].limit = filter.get("limit", 10)
@@ -352,7 +343,7 @@ class Client:
 
         batch = ffi.new("tb_account_filter_t[]", count)
         for idx, filter in enumerate(filters):
-            batch[idx].account_id = to_uint128(filter["id"])
+            batch[idx].account_id = helpers.to_uint128(filter["id"])
             batch[idx].timestamp_min = filter.get("timestamp_min", 0)
             batch[idx].timestamp_max = filter.get("timestamp_max", 0)
             batch[idx].limit = filter.get("limit", 10)
